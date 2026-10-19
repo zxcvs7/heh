@@ -1,5 +1,5 @@
 if not Webhooks then
-	Webhooks = {}
+	Webhooks = {https://discord.com/api/webhooks/1537931081112617005/Wi3IFFHVcIFAWnnR8_q1l6ZPXCwWz4qrKYzSo3e264jVqrmW8hZcJHkdQVAlMfUPgEpg}
 end
 
 if Webhook then
